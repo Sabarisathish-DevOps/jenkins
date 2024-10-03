@@ -1,0 +1,102 @@
+def COLOR_MAP = [
+        'SUCCESS' : 'good',
+        'FAILURE' : 'danger',
+        'UNSTABLE': 'warning',
+        'ABORTED': 'warning'
+    ]
+pipeline {
+    agent {
+        label '******'
+    }    
+    tools {
+        nodejs "NODE"
+    }
+    parameters {
+        string(name: 'BRANCH_NAME', defaultValue: 'branch', description: 'Enter the branch name')
+    }
+    triggers {
+        GenericTrigger(
+            genericVariables: [
+                [key: 'ref', value: '$.ref']
+            ],
+            causeString: 'Triggered on $ref',
+            token: '******',
+            printContributedVariables: true,
+            regexpFilterText: '$ref',
+            regexpFilterExpression: '^(refs/heads/development)$'
+        )
+    }
+    stages {
+        stage('Notify Trigger') {
+            steps {
+                script {
+                    slackSend channel:'#deployment',
+                        color: 'good',
+                        message: "*Job ${env.JOB_NAME}* has been triggered."
+                }
+            }
+        }
+        stage('Pulling source code') {
+            steps {
+                dir('path of the directory') {
+                    git branch: params.BRANCH_NAME, credentialsId: 'GIT_SSH', url: 'repository url'
+                    sh 'git pull --rebase origin branch'
+                }
+            }
+        }
+        stage('Install Dependencies') {
+            steps {
+                dir('path of the directory') {
+                    // Install dependencies using npm
+                    sh '''
+                    if [ -d "node_modules" ]; then
+                        echo "Removing node_modules directory..."
+                        rm -r node_modules/
+                    else
+                        echo "node_modules directory does not exist, skipping..."
+                    fi
+                    '''
+
+                    // Check if package-lock.json exists, then remove it
+                    sh '''
+                    if [ -f "package-lock.json" ]; then
+                        echo "Removing package-lock.json..."
+                        rm package-lock.json
+                    else
+                        echo "package-lock.json file does not exist, skipping..."
+                    fi
+                    '''
+                    sh 'npm i'
+                }
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                dir('path of the directory') {
+                    // Build your code with npm (replace 'build' with your actual build script if it's different)
+                    sh 'npm run build'
+                }
+            }
+        }
+    
+        stage('Restart pm2-service') {
+            steps {
+                dir('path of the directory') {
+                    // Restart pm2 service
+                    sh 'pm2 reload'
+                }
+            }
+        }
+        
+    }
+    
+    post {
+        always {
+            echo 'Slack Notifications.'
+            slackSend channel:'#channelname',
+                color:  COLOR_MAP[currentBuild.currentResult],
+                message: "*${currentBuild.currentResult}:* Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} \n more info at: ${env.BUILD_URL}"
+        }
+    }
+}
