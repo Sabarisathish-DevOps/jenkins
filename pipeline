@@ -23,7 +23,7 @@ pipeline {
             token: '******',
             printContributedVariables: true,
             regexpFilterText: '$ref',
-            regexpFilterExpression: '^(refs/heads/development)$'
+            regexpFilterExpression: '^(refs/heads/branch)$'
         )
     }
     stages {
