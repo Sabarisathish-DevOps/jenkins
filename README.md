@@ -69,23 +69,13 @@ JENKINS CI/CD PIPELINE(detailing):
                     // Install dependencies using npm
                     sh '''
                     if [ -d "node_modules" ]; then
-                        echo "Removing node_modules directory..."
-                        rm -r node_modules/
+                        echo "Removing cache file directory..."
+                        rm -r cache_file/
                     else
-                        echo "node_modules directory does not exist, skipping..."
+                        echo "cache file directory does not exist, skipping..."
                     fi
                     '''
-
-                    // Check if package-lock.json exists, then remove it
-                    sh '''
-                    if [ -f "package-lock.json" ]; then
-                        echo "Removing package-lock.json..."
-                        rm package-lock.json
-                    else
-                        echo "package-lock.json file does not exist, skipping..."
-                    fi
-                    '''
-                    sh 'npm i'
+                    sh 'npm install --legacy-peer-deps'
                 }
             }
         }
