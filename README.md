@@ -1,105 +1,98 @@
-JENKINS CI/CD PIPELINE(detailing):
+# Jenkins Pipeline for Node.js Application Deployment
 
-        def COLOR_MAP = [
-        'SUCCESS' : 'good',
-        'FAILURE' : 'danger',
-        'UNSTABLE': 'warning',
-        'ABORTED': 'warning'
-    ]
+## Overview
+This Jenkins pipeline automates the deployment of a Node.js application by performing the following steps:  
+- Pulling source code from a specified Git branch.  
+- Installing dependencies.  
+- Building the application.  
+- Restarting the PM2 service.  
+- Sending notifications to a Slack channel at different stages of the pipeline.
 
-*) Defining the color map for the notification, whether the job build success or not.
+---
 
-            agent {
-        label '******'
-      } 
+## Pipeline Details
 
-*) Agent section defines the node(server). It is used to select the node, where the job can run.
+### 1. **Pipeline Configuration**
 
-        parameters {
-        string(name: 'BRANCH_NAME', defaultValue: 'branch', description: 'Enter the branch name')
-      }
+#### Agent
+- The pipeline is configured to run on an agent with the specified label.
 
-*) The string parameter is used to define a string value before the pipeline runs. In this case, i used to define my github branch.
+#### Tools
+- Node.js is specified as a required tool and must be pre-installed on the agent.
 
-        triggers {
-        GenericTrigger(
-            genericVariables: [
-                [key: 'ref', value: '$.ref']
-            ],
-            causeString: 'Triggered on $ref',
-            token: '******',
-            printContributedVariables: true,
-            regexpFilterText: '$ref',
-            regexpFilterExpression: '^(refs/heads/branch)$'
-        )
-    }
+#### Parameters
+- **BRANCH_NAME**: A string parameter that allows users to specify the branch name to be built. Defaults to `branch`.
 
-*) triggers block is used to trigger the job when a push event is made to the mention branch.
-   In this case, the GenericTrigger is used, it will check the incoming payload from the webhook and filters the key and value if it is matchs the value that were given, it will trigger the job.
-   Giving token matchs the job and the repository.
-   The webhook url that has to be updated in the github repository
-   https://jenkins_url/generic-webhook-trigger/invoke?token=*******
+#### Triggers
+- **Generic Webhook Trigger**:  
+  The pipeline triggers on a webhook with the following settings:
+  - A regular expression filter ensures that only changes to the specified branch trigger the pipeline.
+  - A token is used to secure the webhook trigger.
 
-            stage('Notify Trigger') {
-            steps {
-                script {
-                    slackSend channel:'#deployment',
-                        color: 'good',
-                        message: "*Job ${env.JOB_NAME}* has been triggered."
-                }
-            }
-        }
+---
 
-*) Notify Trigger this is step is used to send notification in the slack, when the job has triggered.
+### 2. **Stages**
 
-        stage('Pulling source code') {
-            steps {
-                dir('path of the directory') {
-                    git branch: params.BRANCH_NAME, credentialsId: 'GIT_SSH', url: 'repository url'
-                    sh 'git pull --rebase origin branch'
-                }
-            }
-        }
-    
-*) Pulling source code stage is used to pull the source code in the desired directory. If it is a private repository the credientail must be given in the jenkins credentials.
+#### **Stage 1: Notify Trigger**
+- Sends a notification to a Slack channel indicating that the job has been triggered.
+- The message format is:
 
-        stage('Install Dependencies') {
-            steps {
-                dir('path of the directory') {
-                    // Install dependencies using npm
-                    sh '''
-                    if [ -d "node_modules" ]; then
-                        echo "Removing cache file directory..."
-                        rm -r cache_file/
-                    else
-                        echo "cache file directory does not exist, skipping..."
-                    fi
-                    '''
-                    sh 'npm install --legacy-peer-deps'
-                }
-            }
-        }
 
-*) Installing dependencies, this stage is used to install dependencies for the appilcation. It will check for the node_modules, dist, package-lock.json in the working directory, if its there it will remove the folders, if its not there it will skip the step and install dependencies.
+#### **Stage 2: Pulling Source Code**
+- Navigates to the specified directory and pulls the source code from the Git repository.
+- Steps:
+- Checks out the branch specified in the `BRANCH_NAME` parameter.
+- Updates the branch using `git pull --rebase origin <branch>`.
 
-        stage('Build') {
-            steps {
-                dir('path of the directory') {
-                    // Build your code with npm (replace 'build' with your actual build script if it's different)
-                    sh 'npm run build'
-                }
-            }
-        }
+#### **Stage 3: Install Dependencies**
+- Ensures the environment is prepared by installing Node.js dependencies.  
+- Steps:
+- Removes the `cache_file/` directory if it exists.
+- Installs dependencies using `npm install --legacy-peer-deps`.
 
-*) Build stage, this stage is used to build the code in the working directory.
+#### **Stage 4: Build**
+- Builds the application using the defined build script.
+- Steps:
+- Executes the `npm run build` command.
 
-        post {
-        always {
-            echo 'Slack Notifications.'
-            slackSend channel:'#channelname',
-                color:  COLOR_MAP[currentBuild.currentResult],
-                message: "*${currentBuild.currentResult}:* Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} \n more info at: ${env.BUILD_URL}"
-        }
-    }
+#### **Stage 5: Restart PM2 Service**
+- Restarts the PM2 service to deploy the new build.
+- Steps:
+- Uses the `pm2 reload` command to restart the application.
 
-*) The post block, when the stages block are done the post block triggered. In this case, it will send the notification to the slac whether the build is success or failer.
+---
+
+### 3. **Post-Build Actions**
+
+#### **Notifications**
+- A Slack notification is sent upon completion of the pipeline.
+- Notification details:
+- **Channel**: Configurable Slack channel.
+- **Message**:
+  ```
+  <Build Status>: Job <JOB_NAME> build <BUILD_NUMBER>
+  More info at: <BUILD_URL>
+  ```
+- **Color**: Determined by the build status using the `COLOR_MAP`.
+
+---
+
+## Slack Integration
+
+- The pipeline sends notifications to a Slack channel at:
+- The start of the pipeline.
+- After the pipeline completes (success, failure, or any status).
+
+---
+
+## Configuration Files
+
+#### **COLOR_MAP**
+Used to map build statuses to Slack message colors:
+```groovy
+def COLOR_MAP = [
+  'SUCCESS' : 'good',
+  'FAILURE' : 'danger',
+  'UNSTABLE': 'warning',
+  'ABORTED' : 'warning'
+]
